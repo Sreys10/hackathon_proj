@@ -14,7 +14,7 @@ model = load_model("efficientnetb1_poultry_tuned.keras")
 class_names = ['Healthy', 'Coccidiosis', 'Newcastle Disease', 'Avian Influenza']  # Example
 
 def prepare_image(file_path):
-    img = image.load_img(file_path, target_size=(240, 240))  # Adjust size if needed
+    img = image.load_img(file_path, target_size=(240, 240), color_mode='rgb')
     img_array = image.img_to_array(img)
     img_array = np.expand_dims(img_array, axis=0) / 255.0
     return img_array
