@@ -2,24 +2,94 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Poultry Disease Classifier</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .upload-box {
+            border: 2px dashed #3498db;
+            border-radius: 5px;
+            padding: 30px;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .btn {
+            background: #3498db;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .result {
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 5px;
+            background: #f9f9f9;
+        }
+        .preview {
+            max-width: 100%;
+            max-height: 300px;
+            margin: 20px 0;
+        }
+        .healthy { color: green; }
+        .disease { color: red; }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .loaded { background: #d4edda; }
+        .not-loaded { background: #f8d7da; }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Poultry Disease Classifier 🐔</h1>
-        <form action="/" method="POST" enctype="multipart/form-data">
-            <input type="file" name="image" accept="image/*" required>
-            <button type="submit">Predict</button>
-        </form>
-
-        {% if prediction %}
-        <div class="result">
-            <h2>Prediction: <span>{{ prediction }}</span></h2>
-            <p>Confidence: {{ (confidence * 100) | round(2) }}%</p>
-            <img src="{{ image_url }}" alt="Uploaded Image">
+    <div class="header">
+        <h1>Poultry Disease Classifier</h1>
+        <div class="status {% if model_loaded %}loaded{% else %}not-loaded{% endif %}">
+            Model: {% if model_loaded %}Ready{% else %}Not Loaded{% endif %}
         </div>
-        {% endif %}
+        <p>Classes: {{ ', '.join(class_names) }}</p>
     </div>
+
+    <form method="post" enctype="multipart/form-data">
+        <div class="upload-box">
+            <input type="file" name="file" accept="image/*" required>
+            <p>Upload poultry image (JPG, PNG, JPEG)</p>
+        </div>
+        <button type="submit" class="btn">Classify Image</button>
+    </form>
+
+    {% if prediction %}
+        <div class="result">
+            {% if prediction.error %}
+                <div style="color: red;">
+                    <h3>Error</h3>
+                    <p>{{ prediction.error }}</p>
+                </div>
+            {% else %}
+                <h3>Result</h3>
+                <img class="preview" src="{{ prediction.img_url }}">
+                <p>
+                    <strong>Condition:</strong> 
+                    <span class="{% if prediction.class == 'healthy' %}healthy{% else %}disease{% endif %}">
+                        {{ prediction.class }}
+                    </span>
+                </p>
+                <p><strong>Confidence:</strong> {{ prediction.confidence }}%</p>
+            {% endif %}
+        </div>
+    {% endif %}
 </body>
 </html>

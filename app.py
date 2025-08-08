@@ -1,42 +1,87 @@
 from flask import Flask, render_template, request, redirect, url_for
-from tensorflow.keras.models import load_model
+import tensorflow as tf
 from tensorflow.keras.preprocessing import image
 import numpy as np
 import os
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'uploads'
 
-model = load_model("efficientnetb1_poultry_tuned.keras")
+# Configuration
+UPLOAD_FOLDER = 'static/uploads/'
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
+MODEL_PATH = 'diseases_deteection.keras'
+CLASS_NAMES = ['cocci', 'salmo', 'healthy', 'ncd']  # Your 4 classes
 
-# Set class labels manually
-class_names = ['Healthy', 'Coccidiosis', 'Newcastle Disease', 'Avian Influenza']  # Example
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-def prepare_image(file_path):
-    img = image.load_img(file_path, target_size=(240, 240), color_mode='rgb')
-    img_array = image.img_to_array(img)
-    img_array = np.expand_dims(img_array, axis=0) / 255.0
-    return img_array
+# Load model
+try:
+    model = tf.keras.models.load_model(MODEL_PATH)
+    input_shape = model.input_shape[1:3]  # Get (height, width)
+    print(f"Model loaded. Input shape: {input_shape}")
+except Exception as e:
+    print(f"Error loading model: {e}")
+    model = None
+    input_shape = (224, 224)  # Default size
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def predict_image(img_path):
+    if model is None:
+        raise RuntimeError("Model not loaded")
+    
+    try:
+        img = image.load_img(img_path, target_size=input_shape, color_mode='rgb')
+        img_array = image.img_to_array(img)
+        img_array = np.expand_dims(img_array, axis=0) / 255.0
+
+        preds = model.predict(img_array)
+        predicted_idx = np.argmax(preds[0])
+        
+        # Ensure prediction is within our class range
+        if predicted_idx >= len(CLASS_NAMES):
+            raise ValueError(f"Model predicted invalid class index: {predicted_idx}")
+            
+        return CLASS_NAMES[predicted_idx], round(100 * np.max(preds[0]), 2)
+    except Exception as e:
+        raise RuntimeError(f"Prediction failed: {str(e)}")
 
 @app.route('/', methods=['GET', 'POST'])
-def index():
+def upload_file():
+    prediction = None
+    img_url = None
+    
     if request.method == 'POST':
-        file = request.files['image']
-        if file:
+        if 'file' not in request.files:
+            return redirect(request.url)
+            
+        file = request.files['file']
+        if file.filename == '':
+            return redirect(request.url)
+            
+        if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(filepath)
-
-            img_data = prepare_image(filepath)
-            prediction = model.predict(img_data)[0]
-            predicted_class = class_names[np.argmax(prediction)]
-            confidence = np.max(prediction)
-
-            return render_template('index.html', prediction=predicted_class, confidence=confidence, image_url=filepath)
-
-    return render_template('index.html')
+            img_url = url_for('static', filename=f'uploads/{filename}')
+            
+            try:
+                class_name, confidence = predict_image(filepath)
+                prediction = {
+                    'class': class_name,
+                    'confidence': confidence,
+                    'img_url': img_url
+                }
+            except Exception as e:
+                prediction = {'error': str(e)}
+    
+    return render_template('index.html', 
+                         prediction=prediction,
+                         model_loaded=model is not None,
+                         class_names=CLASS_NAMES)
 
 if __name__ == '__main__':
-    os.makedirs('uploads', exist_ok=True)
     app.run(debug=True)
